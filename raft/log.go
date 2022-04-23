@@ -15,7 +15,6 @@
 package raft
 
 import (
-	"github.com/pingcap-incubator/tinykv/log"
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
 
@@ -63,22 +62,22 @@ func newLog(storage Storage) *RaftLog {
 	// Your Code Here (2A).
 	firstIndex, err := storage.FirstIndex()
 	if err != nil {
-		log.Fatalf("raft log newLog storage.Snapshot error: %v", err)
+		panic(err)
 	}
 	lastIndex, err := storage.LastIndex()
 	if err != nil {
-		log.Fatalf("raft log newLog storage.Snapshot error: %v", err)
+		panic(err)
 	}
 	entries := make([]pb.Entry, 0)
 	if lastIndex >= firstIndex {
 		entries, err = storage.Entries(firstIndex, lastIndex+1)
 		if err != nil {
-			log.Fatalf("raft log newLog storage.Snapshot error: %v", err)
+			panic(err)
 		}
 	}
 	snapshotTerm, err := storage.Term(firstIndex - 1)
 	if err != nil {
-		log.Fatalf("raft log newLog storage.Snapshot error: %v", err)
+		panic(err)
 	}
 
 	l := RaftLog{

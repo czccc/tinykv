@@ -144,13 +144,9 @@ func (rn *RawNode) Step(m pb.Message) error {
 // Ready returns the current point-in-time state of this RawNode.
 func (rn *RawNode) Ready() Ready {
 	// Your Code Here (2A).
-	committed := make([]pb.Entry, 0)
-	for i := rn.Raft.RaftLog.applied + 1; i <= rn.Raft.RaftLog.committed; i++ {
-		committed = append(committed, rn.Raft.RaftLog.entries[i-1])
-	}
 	return Ready{
 		Entries:          rn.Raft.RaftLog.unstableEntries(),
-		CommittedEntries: committed,
+		CommittedEntries: rn.Raft.RaftLog.nextEnts(),
 	}
 }
 
