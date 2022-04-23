@@ -261,25 +261,23 @@ func (r *Raft) tickHeartbeat() {
 // becomeFollower transform this peer's state to Follower
 func (r *Raft) becomeFollower(term uint64, lead uint64) {
 	// Your Code Here (2A).
+	r.State = StateFollower
 	r.Term = term
 	r.Vote = lead
-	for i := range r.Prs {
-		r.votes[i] = false
-	}
-	r.State = StateFollower
 	r.Lead = lead
+	r.votes = make(map[uint64]bool)
 	r.electionElapsed = 0
 }
 
 // becomeCandidate transform this peer's state to candidate
 func (r *Raft) becomeCandidate() {
 	// Your Code Here (2A).
+	r.State = StateCandidate
 	r.Term++
 	r.Vote = r.id
-	r.State = StateCandidate
 	r.Lead = None
-	r.electionElapsed = 0
 	r.votes = make(map[uint64]bool)
+	r.electionElapsed = 0
 	r.Step(pb.Message{From: r.id, To: r.id, Term: r.Term, MsgType: pb.MessageType_MsgRequestVoteResponse, Reject: false})
 }
 
@@ -299,7 +297,7 @@ func (r *Raft) becomeLeader() {
 		To:      r.id,
 		Term:    r.Term,
 		MsgType: pb.MessageType_MsgPropose,
-		Entries: []*pb.Entry{{Data: nil}},
+		Entries: []*pb.Entry{{}},
 	})
 
 }
@@ -447,15 +445,15 @@ func (r *Raft) handlePropose(m pb.Message) {
 			Term:      r.Term,
 			Data:      ent.Data,
 		})
-		r.Step(pb.Message{
-			From:    r.id,
-			To:      r.id,
-			Term:    r.Term,
-			MsgType: pb.MessageType_MsgAppendResponse,
-			Reject:  false,
-			Index:   r.RaftLog.LastIndex(),
-		})
 	}
+	r.Step(pb.Message{
+		From:    r.id,
+		To:      r.id,
+		Term:    r.Term,
+		MsgType: pb.MessageType_MsgAppendResponse,
+		Reject:  false,
+		Index:   r.RaftLog.LastIndex(),
+	})
 	r.bcastAppend()
 }
 
