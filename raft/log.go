@@ -83,7 +83,7 @@ func newLog(storage Storage) *RaftLog {
 
 	l := RaftLog{
 		storage:       storage,
-		committed:     firstIndex,
+		committed:     firstIndex - 1,
 		applied:       firstIndex - 1,
 		stabled:       lastIndex,
 		entries:       entries,
