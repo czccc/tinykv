@@ -299,7 +299,6 @@ func (r *Raft) becomeLeader() {
 		MsgType: pb.MessageType_MsgPropose,
 		Entries: []*pb.Entry{{}},
 	})
-
 }
 
 // Step the entrance of handle message, see `MessageType`
@@ -419,7 +418,7 @@ func (r *Raft) campaign() {
 }
 
 func (r *Raft) checkMatch() {
-	var match = make([]uint64, 0, len(r.Prs))
+	match := make([]uint64, 0, len(r.Prs))
 	for i := range r.Prs {
 		match = append(match, r.Prs[i].Match)
 	}
@@ -427,11 +426,11 @@ func (r *Raft) checkMatch() {
 		return match[i] < match[j]
 	})
 	matched := match[(len(match)+1)/2-1]
-	matched_term, err := r.RaftLog.Term(matched)
+	matchedTerm, err := r.RaftLog.Term(matched)
 	if err != nil {
 		panic(err)
 	}
-	if matched_term == r.Term && matched > r.RaftLog.committed {
+	if matchedTerm == r.Term && matched > r.RaftLog.committed {
 		r.RaftLog.committed = matched
 		r.bcastAppend()
 	}
@@ -478,9 +477,10 @@ func (r *Raft) handleRequestVote(m pb.Message) {
 	}
 	r.send(msg, m.From)
 }
+
 func (r *Raft) handleRequestVoteResponse(m pb.Message) {
-	var count = 0
-	var reject = 0
+	count := 0
+	reject := 0
 	r.votes[m.From] = !m.Reject
 	for _, v := range r.votes {
 		if v {
@@ -526,6 +526,7 @@ func (r *Raft) sendAppend(to uint64) bool {
 		return true
 	}
 }
+
 func (r *Raft) bcastAppend() {
 	for i := range r.Prs {
 		if i != r.id {
@@ -572,6 +573,7 @@ func (r *Raft) handleAppendEntries(m pb.Message) {
 	}
 	r.send(msg, m.From)
 }
+
 func (r *Raft) handleAppendEntriesResponse(m pb.Message) {
 	if m.Reject {
 		r.Prs[m.From].Next -= 1
@@ -592,6 +594,7 @@ func (r *Raft) sendHeartbeat(to uint64) {
 	}
 	r.send(m, to)
 }
+
 func (r *Raft) bcastHeartbeat() {
 	for i := range r.Prs {
 		if i != r.id {
@@ -617,6 +620,7 @@ func (r *Raft) handleHeartbeat(m pb.Message) {
 	r.electionElapsed = 0
 	r.send(msg, m.From)
 }
+
 func (r *Raft) handleHeartbeatResponse(m pb.Message) {
 	if !m.Reject {
 		r.Prs[m.From].Match = max(r.Prs[m.From].Match, m.Index)

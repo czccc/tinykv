@@ -190,7 +190,7 @@ func TestLeaderElectionOverwriteNewerLogs2AB(t *testing.T) {
 
 func TestVoteFromAnyState2AA(t *testing.T) {
 	vt := pb.MessageType_MsgRequestVote
-	vt_resp := pb.MessageType_MsgRequestVoteResponse
+	vtResp := pb.MessageType_MsgRequestVoteResponse
 	for st := StateType(0); st <= StateLeader; st++ {
 		r := newTestRaft(1, []uint64{1, 2, 3}, 10, 1, NewMemoryStorage())
 		r.Term = 1
@@ -225,9 +225,9 @@ func TestVoteFromAnyState2AA(t *testing.T) {
 			t.Errorf("%s,%s: %d response messages, want 1: %+v", vt, st, len(r.msgs), r.msgs)
 		} else {
 			resp := r.msgs[0]
-			if resp.MsgType != vt_resp {
+			if resp.MsgType != vtResp {
 				t.Errorf("%s,%s: response message is %s, want %s",
-					vt, st, resp.MsgType, vt_resp)
+					vt, st, resp.MsgType, vtResp)
 			}
 			if resp.Reject {
 				t.Errorf("%s,%s: unexpected rejection", vt, st)
@@ -278,7 +278,7 @@ func TestLogReplication2AB(t *testing.T) {
 			tt.send(m)
 		}
 
-		for j, x := range tt.network.peers {
+		for j, x := range tt.peers {
 			sm := x.(*Raft)
 
 			if sm.RaftLog.committed != tt.wcommitted {
@@ -503,8 +503,10 @@ func TestOldMessages2AB(t *testing.T) {
 
 	ilog := newLog(
 		newMemoryStorageWithEnts([]pb.Entry{
-			{}, {Data: nil, Term: 1, Index: 1},
-			{Data: nil, Term: 2, Index: 2}, {Data: nil, Term: 3, Index: 3},
+			{},
+			{Data: nil, Term: 1, Index: 1},
+			{Data: nil, Term: 2, Index: 2},
+			{Data: nil, Term: 3, Index: 3},
 			{Data: []byte("somedata"), Term: 3, Index: 4},
 		}))
 	ilog.committed = 4
@@ -562,10 +564,10 @@ func TestProposal2AB(t *testing.T) {
 }
 
 // TestHandleMessageType_MsgAppend ensures:
-// 1. Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm.
-// 2. If an existing entry conflicts with a new one (same index but different terms),
-//    delete the existing entry and all that follow it; append any new entries not already in the log.
-// 3. If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry).
+//  1. Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm.
+//  2. If an existing entry conflicts with a new one (same index but different terms),
+//     delete the existing entry and all that follow it; append any new entries not already in the log.
+//  3. If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry).
 func TestHandleMessageType_MsgAppend2AB(t *testing.T) {
 	tests := []struct {
 		m       pb.Message
