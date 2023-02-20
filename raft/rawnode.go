@@ -160,8 +160,8 @@ func (rn *RawNode) HasReady() bool {
 // last Ready results.
 func (rn *RawNode) Advance(rd Ready) {
 	// Your Code Here (2A).
-	rn.Raft.RaftLog.stabled += uint64(len(rd.Entries))
-	rn.Raft.RaftLog.applied += uint64(len(rd.CommittedEntries))
+	rn.Raft.RaftLog.stableTo(rn.Raft.RaftLog.stabled + uint64(len(rd.Entries)))
+	rn.Raft.RaftLog.applyTo(rn.Raft.RaftLog.applied + uint64(len(rd.CommittedEntries)))
 }
 
 // GetProgress return the Progress of this node and its peers, if this

@@ -15,6 +15,9 @@
 package raft
 
 import (
+	"fmt"
+
+	"github.com/pingcap-incubator/tinykv/log"
 	pb "github.com/pingcap-incubator/tinykv/proto/pkg/eraftpb"
 )
 
@@ -54,6 +57,12 @@ type RaftLog struct {
 	// Your Data Here (2A).
 	snapshotIndex uint64
 	snapshotTerm  uint64
+}
+
+func (l *RaftLog) String() string {
+	return fmt.Sprintf("[RaftLog Term %d Index %d][Snap %d %d][Ents %d][A %d C %d S %d]",
+		l.LastTerm(), l.LastIndex(),
+		l.snapshotIndex, l.snapshotTerm, len(l.entries), l.applied, l.committed, l.stabled)
 }
 
 // newLog returns log using the given storage. It recovers the log
@@ -116,13 +125,77 @@ func (l *RaftLog) unstableEntries() []pb.Entry {
 // nextEnts returns all the committed but not applied entries
 func (l *RaftLog) nextEnts() (ents []pb.Entry) {
 	// Your Code Here (2A).
-	return l.entries[l.applied-l.snapshotIndex : l.committed-l.snapshotIndex]
+	for i := l.applied + 1; i <= l.committed; i++ {
+		ents = append(ents, *l.getEntry(i))
+	}
+	return ents
+}
+
+// Return entries with index in [from, to).
+func (l *RaftLog) getEntries(from, to uint64) (ents []*pb.Entry) {
+	if from <= l.snapshotIndex {
+		log.Fatalf("%s `from` less than min log index! from=%d, min_index=%d", l, from, l.snapshotIndex)
+	}
+	if to > l.LastIndex()+1 {
+		log.Fatalf("%s `to` exceed max log index! to=%d, max_index=%d", l, to, l.snapshotIndex+uint64(len(l.entries)))
+	}
+	if from > to {
+		log.Debugf("%s rangeEntries from > to! return empty entries! from=%d, to=%d", l, from, to)
+		return ents
+	}
+	for i := from; i < to; i++ {
+		ents = append(ents, l.getEntry(i))
+	}
+	return ents
+}
+
+// Return the log entry in given index
+func (l *RaftLog) getEntry(index uint64) (ent *pb.Entry) {
+	if index <= l.snapshotIndex {
+		log.Fatalf("%s Found [index %d] <= [l.snapshotIndex %d]", l, index, l.snapshotIndex)
+	}
+	if index > l.LastIndex() {
+		log.Fatalf("%s Found [index %d] > [l.LastIndex() %d]", l, index, l.LastIndex())
+	}
+	return &l.entries[index-l.snapshotIndex-1]
+}
+
+func (l *RaftLog) appendEntries(prevIndex uint64, ents []*pb.Entry) {
+	if prevIndex < l.snapshotIndex {
+		log.Fatalf("%s invalid prevIndex=%d", l, prevIndex)
+	} else if prevIndex < l.LastIndex() {
+		for i, ent := range ents {
+			term, err := l.Term(ent.Index)
+			if err != nil || term != ent.Term {
+				l.entries = l.entries[:ent.Index-l.snapshotIndex-1]
+				l.stableTo(ent.Index - 1)
+				for _, ent := range ents[i:] {
+					l.entries = append(l.entries, *ent)
+				}
+				break
+			}
+		}
+	} else if prevIndex == l.LastIndex() {
+		for _, ent := range ents {
+			l.entries = append(l.entries, *ent)
+		}
+	} else {
+		log.Fatalf("%s invalid prevIndex=%d", l, prevIndex)
+	}
 }
 
 // LastIndex return the last index of the log entries
 func (l *RaftLog) LastIndex() uint64 {
 	// Your Code Here (2A).
 	return uint64(len(l.entries)) + l.snapshotIndex
+}
+
+// LastTerm return the last term of the log entries
+func (l *RaftLog) LastTerm() uint64 {
+	if len(l.entries) > 0 {
+		return l.entries[len(l.entries)-1].Term
+	}
+	return l.snapshotTerm
 }
 
 // Term return the term of the entry in the given index
@@ -135,6 +208,27 @@ func (l *RaftLog) Term(i uint64) (uint64, error) {
 	} else if i == l.snapshotIndex {
 		return l.snapshotTerm, nil
 	} else {
-		return l.entries[i-l.snapshotIndex-1].Term, nil
+		return l.getEntry(i).Term, nil
 	}
+}
+
+func (l *RaftLog) applyTo(index uint64) {
+	if index > l.LastIndex() || index < l.applied || index > l.committed {
+		log.Fatalf("%s invalid applied index, index=%d", l, index)
+	}
+	l.applied = index
+}
+
+func (l *RaftLog) commitTo(index uint64) {
+	if index > l.LastIndex() || index < l.committed {
+		log.Fatalf("%s invalid committed index, index=%d", l, index)
+	}
+	l.committed = index
+}
+
+func (l *RaftLog) stableTo(index uint64) {
+	if index > l.LastIndex() || index < l.committed {
+		log.Fatalf("%s invalid applied index, index=%d", l, index)
+	}
+	l.stabled = index
 }
