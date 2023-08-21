@@ -113,6 +113,8 @@ func (ps *PeerStorage) Entries(low, high uint64) ([]eraftpb.Entry, error) {
 		}
 		// May meet gap or has been compacted.
 		if entry.Index != nextIndex {
+			log.Infof("low=%d high=%d, len=%d, last=%d", low, high, len(buf), ps.raftState.LastIndex)
+			log.Fatalf("entry.Index=%d nextIndex=%d len(buf)=%d", entry.Index, nextIndex, len(buf))
 			break
 		}
 		nextIndex++
@@ -122,6 +124,7 @@ func (ps *PeerStorage) Entries(low, high uint64) ([]eraftpb.Entry, error) {
 	if len(buf) == int(high-low) {
 		return buf, nil
 	}
+	log.Infof("low=%d high=%d, len=%d, last=%d", low, high, len(buf), ps.raftState.LastIndex)
 	// Here means we don't fetch enough entries.
 	return nil, raft.ErrUnavailable
 }
@@ -308,6 +311,35 @@ func ClearMeta(engines *engine_util.Engines, kvWB, raftWB *engine_util.WriteBatc
 // never be committed
 func (ps *PeerStorage) Append(entries []eraftpb.Entry, raftWB *engine_util.WriteBatch) error {
 	// Your Code Here (2B).
+	if len(entries) == 0 {
+		return nil
+	}
+
+	firstIndex, err := ps.FirstIndex()
+	if err != nil {
+		return err
+	}
+	entriesLastIndex := entries[len(entries)-1].Index
+	if entriesLastIndex < firstIndex {
+		return nil
+	}
+	if firstIndex > entries[0].Index {
+		entries = entries[firstIndex-entries[0].Index:]
+	}
+	for _, entry := range entries {
+		if err := raftWB.SetMeta(meta.RaftLogKey(ps.region.GetId(), entry.Index), &entry); err != nil {
+			log.Panic(err)
+		}
+	}
+	lastIndex, err := ps.LastIndex()
+	if err != nil {
+		return err
+	}
+	for i := entriesLastIndex + 1; i <= lastIndex; i++ {
+		raftWB.DeleteMeta(meta.RaftLogKey(ps.region.GetId(), i))
+	}
+	ps.raftState.LastIndex = entriesLastIndex
+	ps.raftState.LastTerm = entries[len(entries)-1].Term
 	return nil
 }
 
@@ -331,6 +363,17 @@ func (ps *PeerStorage) ApplySnapshot(snapshot *eraftpb.Snapshot, kvWB *engine_ut
 func (ps *PeerStorage) SaveReadyState(ready *raft.Ready) (*ApplySnapResult, error) {
 	// Hint: you may call `Append()` and `ApplySnapshot()` in this function
 	// Your Code Here (2B/2C).
+	raftWB := &engine_util.WriteBatch{}
+	if err := ps.Append(ready.Entries, raftWB); err != nil {
+		return nil, err
+	}
+	if !raft.IsEmptyHardState(ready.HardState) {
+		ps.raftState.HardState = &ready.HardState
+	}
+	if err := raftWB.SetMeta(meta.RaftStateKey(ps.region.GetId()), ps.raftState); err != nil {
+		return nil, err
+	}
+	raftWB.MustWriteToDB(ps.Engines.Raft)
 	return nil, nil
 }
 
